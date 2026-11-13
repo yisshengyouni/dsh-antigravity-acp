@@ -16,6 +16,7 @@
  * API 形态取自官方协议与公开实现的**事实**（端点、字段名、0..1 的
  * remainingFraction），代码为本项目原创实现。
  */
+import { execFile } from 'node:child_process'
 import { readFile, readdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -140,8 +141,31 @@ export interface QuotaDeps {
   httpTimeoutMs?: number
 }
 
-function defaultReadFile(path: string): Promise<string> {
-  return readFile(path, 'utf8')
+function readMacKeychainCliToken(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile('/usr/bin/security', ['find-generic-password', '-s', 'gemini', '-a', 'antigravity', '-w'], { timeout: 5_000 }, (error, stdout) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      let raw = String(stdout).trim()
+      if (raw.startsWith('go-keyring-base64:')) {
+        raw = Buffer.from(raw.slice('go-keyring-base64:'.length), 'base64').toString('utf8')
+      }
+      resolve(raw)
+    })
+  })
+}
+
+export async function defaultReadFile(path: string): Promise<string> {
+  try {
+    return await readFile(path, 'utf8')
+  } catch (error) {
+    if (process.platform === 'darwin' && path.endsWith('antigravity-oauth-token')) {
+      return await readMacKeychainCliToken()
+    }
+    throw error
+  }
 }
 
 /**
@@ -224,9 +248,20 @@ export function isTokenUsable(state: QuotaTokenState, nowMs: number, marginMs = 
 
 /** 从官方二进制文本里提取 client 元数据（正则即时编译匹配，不留模块级全局状态）；取不到返回 undefined（不猜值）。 */
 export function parseOAuthClientFromBinary(text: string): OAuthClientMeta | undefined {
+  const adjacent = [...text.matchAll(/(\d+-[a-z0-9]+\.apps\.googleusercontent\.com)[\s\S]{1,100}?(GOCSPX-[A-Za-z0-9_-]{28})/g)]
+  if (adjacent.length > 0) {
+    const last = adjacent[adjacent.length - 1]!
+    return { clientId: last[1]!, clientSecret: last[2]! }
+  }
   const ids = text.match(/\d+-[a-z0-9]+\.apps\.googleusercontent\.com/g) ?? []
   const secrets = text.match(/GOCSPX-[A-Za-z0-9_-]{28}/g) ?? []
   if (ids.length === 0 || secrets.length === 0) return undefined
+  const uniqueIds = [...new Set(ids)]
+  const uniqueSecrets = [...new Set(secrets)]
+  const preferredIdx = uniqueIds.findIndex((id) => id.startsWith('1071006060591-'))
+  if (preferredIdx >= 0 && preferredIdx < uniqueSecrets.length) {
+    return { clientId: uniqueIds[preferredIdx]!, clientSecret: uniqueSecrets[preferredIdx]! }
+  }
   // 与官方 CLI 同源的最后一条 client id 最可能是当前在用的。
   const clientId = ids[ids.length - 1] as string
   // 多份元数据同时存在时必须按「相邻出现」配对，不能固定取第一条 secret：
@@ -522,6 +557,7 @@ async function postCodeAssist(
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        'User-Agent': `antigravity/acp/${DEFAULT_ACP_SERVER_VERSION} (aidev_client; os_type=${process.platform === 'win32' ? 'windows' : process.platform}; arch=${process.arch === 'x64' ? 'amd64' : process.arch}; host_path=dsh-bundle-antigravity-host/0.1.38; proxy_client=antigravity/sdk)`,
       },
       body: JSON.stringify(payload),
       signal: timeoutSignal(deps),

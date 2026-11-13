@@ -531,10 +531,14 @@ export function mapNodePlatform(platform: NodeJS.Platform, arch: string): { plat
   return { platform: mappedPlatform, arch: mappedArch }
 }
 
-/** posix 解压产物补执行位。 */
+/** posix 解压产物补执行位（主程序及同目录 localharness 子进程二进制）。 */
 export async function ensureExecutable(file: string, flavor: ExecutableFlavor): Promise<void> {
   if (flavor === 'posix') {
     await chmod(file, 0o755)
+    const dir = dirname(file)
+    for (const sibling of ['localharness_external', 'localharness']) {
+      await chmod(join(dir, sibling), 0o755).catch(() => undefined)
+    }
   } else {
     // windows 无需额外操作；存在性检查交给调用方。
     await access(file)

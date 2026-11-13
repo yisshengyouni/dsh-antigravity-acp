@@ -28,7 +28,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { homedir as osHomedir } from 'node:os'
 import { join } from 'node:path'
-import { parseTokenState, refreshAccessToken, resolveOAuthClient } from './quota.js'
+import { defaultReadFile, parseTokenState, refreshAccessToken, resolveOAuthClient } from './quota.js'
 import type { OAuthClientMeta, QuotaTokenState } from './quota.js'
 import { redactSensitiveText } from './redact.js'
 
@@ -258,7 +258,7 @@ function tokenStillFresh(state: QuotaTokenState, nowMs: number, marginMs: number
 export async function ensureAcpCredentials(deps: AcpCredentialDeps = {}): Promise<AcpCredentialResult> {
   const home = deps.homedir?.() ?? osHomedir()
   const env = deps.env ?? process.env
-  const read = deps.readFileImpl ?? ((path: string) => readFile(path, 'utf8'))
+  const read = deps.readFileImpl ?? defaultReadFile
   const write = deps.writeFileImpl ?? writeFileAtomic
   const makeDir = deps.mkdirImpl ?? ((path: string) => mkdir(path, { recursive: true }).then(() => undefined))
   const now = deps.now ?? Date.now
@@ -328,17 +328,19 @@ export async function ensureAcpCredentials(deps: AcpCredentialDeps = {}): Promis
     return { ...base, ready: true, status: 'existing', settingsWritten }
   }
 
-  // 既有 access token 仍新鲜：直接可用，不动文件。
-  if (existing.usable && tokenStillFresh(existing.state, now(), margin)) {
+  const cliRaw = await readJsonOrUndefined(cliTokenPath, read)
+  const cliState = parseTokenState(cliRaw)
+  const cliChanged = Boolean(cliState.refreshToken && cliState.refreshToken !== existing.state.refreshToken)
+
+  // 既有 access token 仍新鲜且 CLI 登录态未变更：直接可用，不动文件。
+  if (!cliChanged && existing.usable && tokenStillFresh(existing.state, now(), margin)) {
     return { ...base, ready: true, status: 'existing', settingsWritten }
   }
 
-  // 需要换发：refresh_token 来源依次为既有文件 → CLI 登录态。
-  let source: AcpCredentialStatus = existing.usable ? 'refreshed' : 'imported'
+  // 需要换发：若 CLI 重新登录/切换了 refresh_token 则优先同步 CLI，否则用既有文件 → CLI 登录态。
+  let source: AcpCredentialStatus = existing.usable && !cliChanged ? 'refreshed' : 'imported'
   let state = existing.state
-  if (!state.refreshToken) {
-    const cliRaw = await readJsonOrUndefined(cliTokenPath, read)
-    const cliState = parseTokenState(cliRaw)
+  if (cliChanged || !state.refreshToken) {
     if (!cliState.refreshToken) {
       return {
         ...base,

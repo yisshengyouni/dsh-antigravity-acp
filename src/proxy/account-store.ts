@@ -13,7 +13,7 @@
 import { randomUUID } from 'node:crypto'
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { parseTokenState } from '../runtime/quota.js'
+import { defaultReadFile, parseTokenState } from '../runtime/quota.js'
 import type { QuotaTokenState } from '../runtime/quota.js'
 
 export const PROXY_ACCOUNT_FILE = 'proxy-account.json'
@@ -192,7 +192,7 @@ export async function importCliCredential(
   readFileImpl?: (path: string) => Promise<string>,
 ): Promise<ProxyCredential | undefined> {
   try {
-    const read = readFileImpl ?? ((path: string) => readFile(path, 'utf8'))
+    const read = readFileImpl ?? defaultReadFile
     const state = parseTokenState(JSON.parse(await read(tokenPath)))
     const credential = proxyCredentialFromCliToken(state, nowMs)
     // 只有 access 或 refresh 至少其一才有意义；只有 refresh 时由适配器先换发再用。

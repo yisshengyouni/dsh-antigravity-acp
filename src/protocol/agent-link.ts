@@ -695,6 +695,9 @@ export function officialAgentEnv(options: {
     TEMP: options.tmpDir,
     TMP: options.tmpDir,
     TMPDIR: options.tmpDir,
+    AGY_ACP_FORCE_FILE_STORAGE: '1',
+    NO_PROXY: 'localhost,127.0.0.1,::1',
+    no_proxy: 'localhost,127.0.0.1,::1',
   }
   const forward = [
     'USERPROFILE',
@@ -722,6 +725,10 @@ export function officialAgentEnv(options: {
   // 代理放在最后合并：用户配置优先；未配置时转发宿主自身的代理环境，避免出现
   // 「宿主走代理、官方进程直连」的分裂路由（本机直连 Google 不通）。
   Object.assign(env, options.proxy ? buildProxyEnv(options.proxy) : ambientProxyEnv(parent))
+  if (env.ALL_PROXY?.startsWith('socks') && (env.HTTPS_PROXY?.startsWith('http') || env.HTTP_PROXY?.startsWith('http'))) {
+    env.ALL_PROXY = env.HTTPS_PROXY ?? env.HTTP_PROXY
+    env.all_proxy = env.ALL_PROXY
+  }
   return env
 }
 
