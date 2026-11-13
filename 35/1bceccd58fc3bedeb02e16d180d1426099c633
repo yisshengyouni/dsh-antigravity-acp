@@ -1,0 +1,36 @@
+dist/adapter.js
+  h_b85baef726d713 129,136
+dist/config.d.ts
+  h_b85baef726d713 21-24
+dist/config.js
+  h_b85baef726d713 21-24,41-42,47-50
+dist/prompt-budget.d.ts
+  h_b85baef726d713 1-15
+dist/prompt-budget.js
+  h_b85baef726d713 1-78
+dist/prompt.js
+  h_b85baef726d713 2-3,7-13,27,39-64
+src/adapter.ts
+  h_b85baef726d713 139,146
+src/config.ts
+  h_b85baef726d713 21-24,45-48,64-65,70-73
+src/prompt-budget.ts
+  h_b85baef726d713 1-87
+src/prompt.ts
+  h_b85baef726d713 1,4-7,11-20,22,31,43-45,57-83
+tests/adapter.test.ts
+  h_b85baef726d713 172-173,176,179-182,226-227,230-241
+tests/prompt-budget.test.ts
+  h_b85baef726d713 1-208
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "351bceccd58fc3bedeb02e16d180d1426099c633",
+  "prompts": {},
+  "humans": {
+    "h_b85baef726d713": {
+      "author": "huqiang <qiang.hu@hipac.cn>"
+    }
+  }
+}
